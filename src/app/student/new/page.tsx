@@ -15,18 +15,19 @@ import {
 import { useAuth } from "@/context/auth-context";
 import { submitGrievance } from "@/lib/services/grievances";
 import { getCachedSystemSettings } from "@/app/actions/settings-actions";
+import { DEFAULT_SYSTEM_SETTINGS } from "@/types";
 
 export default function NewGrievancePage() {
   const router = useRouter();
   const { profile } = useAuth();
 
-  const [categories, setCategories] = useState<string[]>([]);
-  const [departments, setDepartments] = useState<string[]>([]);
-  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [categories, setCategories] = useState<string[]>(DEFAULT_SYSTEM_SETTINGS.categories);
+  const [departments, setDepartments] = useState<string[]>(DEFAULT_SYSTEM_SETTINGS.departments);
+  const [loadingSettings, setLoadingSettings] = useState(false);
 
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("");
-  const [department, setDepartment] = useState("");
+  const [category, setCategory] = useState(DEFAULT_SYSTEM_SETTINGS.categories[0] || "");
+  const [department, setDepartment] = useState(DEFAULT_SYSTEM_SETTINGS.departments[0] || "");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,16 +36,17 @@ export default function NewGrievancePage() {
   useEffect(() => {
     getCachedSystemSettings()
       .then((settings) => {
-        setCategories(settings.categories);
-        setDepartments(settings.departments);
-        if (settings.categories.length > 0) setCategory(settings.categories[0]);
-        if (settings.departments.length > 0) setDepartment(settings.departments[0]);
+        if (settings?.categories && settings.categories.length > 0) {
+          setCategories(settings.categories);
+          setCategory((prev) => (prev && settings.categories.includes(prev) ? prev : settings.categories[0]));
+        }
+        if (settings?.departments && settings.departments.length > 0) {
+          setDepartments(settings.departments);
+          setDepartment((prev) => (prev && settings.departments.includes(prev) ? prev : settings.departments[0]));
+        }
       })
       .catch((err) => {
-        console.error("Failed to load settings:", err);
-      })
-      .finally(() => {
-        setLoadingSettings(false);
+        console.warn("Could not load dynamic settings (defaults active):", err);
       });
   }, []);
 

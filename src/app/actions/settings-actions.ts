@@ -2,68 +2,44 @@
 
 import { adminDb, isFirebaseAdminConfigured } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
-import { unstable_cache, revalidateTag } from "next/cache";
-import { SystemSettings } from "@/types";
+import { revalidateTag } from "next/cache";
+import { SystemSettings, DEFAULT_SYSTEM_SETTINGS } from "@/types";
 import { requireAdmin } from "@/lib/server-auth";
 import { assertRateLimit, getUserAgent, isSuspiciousBot } from "@/lib/rate-limit";
 
-const DEFAULT_SETTINGS: SystemSettings = {
-  categories: [
-    "Academic & Curriculum",
-    "Examinations & Evaluation",
-    "Hostel & Mess Facilities",
-    "Campus Infrastructure & Labs",
-    "Harassment & Discipline",
-    "Library & Learning Resources",
-    "Fee & Financial Aid",
-    "Sports & Extra-Curricular",
-    "General / Other",
-  ],
-  departments: [
-    "Computer Science & Engineering",
-    "Electronics & Communication",
-    "Mechanical Engineering",
-    "Civil Engineering",
-    "Electrical Engineering",
-    "Information Technology",
-    "Administrative Office",
-    "Accounts & Finance",
-    "Hostel Administration",
-  ],
-};
-
 /**
- * Low-Read Cache: Cached at the Next.js server layer with tag 'system-settings'.
- * Client navigations do NOT trigger repeated Firestore reads!
+ * System Settings fetcher:
+ * Queries Firestore settings/system document or safely falls back to standard institutional defaults.
+ * Guarantees categories & departments are never blank, even if server credentials or Firestore are unseeded.
  */
-export const getCachedSystemSettings = unstable_cache(
-  async (): Promise<SystemSettings> => {
-    if (!isFirebaseAdminConfigured) {
-      return DEFAULT_SETTINGS;
-    }
+export async function getCachedSystemSettings(): Promise<SystemSettings> {
+  if (!isFirebaseAdminConfigured) {
+    return DEFAULT_SYSTEM_SETTINGS;
+  }
 
-    try {
-      const doc = await adminDb.collection("settings").doc("system").get();
-      if (!doc.exists) {
+  try {
+    const doc = await adminDb.collection("settings").doc("system").get();
+    if (!doc.exists) {
+      try {
         await adminDb.collection("settings").doc("system").set({
-          ...DEFAULT_SETTINGS,
+          ...DEFAULT_SYSTEM_SETTINGS,
           updatedAt: FieldValue.serverTimestamp(),
         });
-        return DEFAULT_SETTINGS;
+      } catch (seedErr) {
+        console.warn("Could not seed default settings into Firestore:", seedErr);
       }
-      const data = doc.data() as SystemSettings;
-      return {
-        categories: data.categories || DEFAULT_SETTINGS.categories,
-        departments: data.departments || DEFAULT_SETTINGS.departments,
-      };
-    } catch (error) {
-      console.warn("Could not read settings from Admin DB (falling back to defaults):", error);
-      return DEFAULT_SETTINGS;
+      return DEFAULT_SYSTEM_SETTINGS;
     }
-  },
-  ["system-settings-key"],
-  { revalidate: 3600, tags: ["system-settings"] }
-);
+    const data = doc.data() as Partial<SystemSettings>;
+    return {
+      categories: data?.categories && data.categories.length > 0 ? data.categories : DEFAULT_SYSTEM_SETTINGS.categories,
+      departments: data?.departments && data.departments.length > 0 ? data.departments : DEFAULT_SYSTEM_SETTINGS.departments,
+    };
+  } catch (error) {
+    console.warn("Could not read settings from Admin DB (falling back to defaults):", error);
+    return DEFAULT_SYSTEM_SETTINGS;
+  }
+}
 
 /**
  * Server Action: Update categories or departments and instantly revalidate cache tag.

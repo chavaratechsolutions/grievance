@@ -17,12 +17,13 @@ import { getCachedSystemSettings, updateSystemSettings } from "@/app/actions/set
 import { useAuth } from "@/context/auth-context";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase/client";
+import { DEFAULT_SYSTEM_SETTINGS } from "@/types";
 
 export default function SystemSettingsPage() {
   const { role, profile, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [categories, setCategories] = useState<string[]>([]);
-  const [departments, setDepartments] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>(DEFAULT_SYSTEM_SETTINGS.categories);
+  const [departments, setDepartments] = useState<string[]>(DEFAULT_SYSTEM_SETTINGS.departments);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
@@ -34,10 +35,10 @@ export default function SystemSettingsPage() {
     setLoading(true);
     try {
       const data = await getCachedSystemSettings();
-      setCategories(data.categories);
-      setDepartments(data.departments);
+      if (data?.categories?.length) setCategories(data.categories);
+      if (data?.departments?.length) setDepartments(data.departments);
     } catch (e) {
-      console.error(e);
+      console.warn("Could not fetch server settings (using defaults):", e);
     } finally {
       setLoading(false);
     }

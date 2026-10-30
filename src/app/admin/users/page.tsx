@@ -25,6 +25,7 @@ import { useAuth } from "@/context/auth-context";
 import { useRouter } from "next/navigation";
 import { QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
 import { auth } from "@/lib/firebase/client";
+import { DEFAULT_SYSTEM_SETTINGS } from "@/types";
 
 export default function UserManagementPage() {
   const { role, profile, loading: authLoading } = useAuth();
@@ -33,7 +34,7 @@ export default function UserManagementPage() {
   const [counts, setCounts] = useState({ total: 0, students: 0, staff: 0 });
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState<Role | "all">("all");
-  const [departments, setDepartments] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<string[]>(DEFAULT_SYSTEM_SETTINGS.departments);
 
   // Modals
   const [singleUserModalOpen, setSingleUserModalOpen] = useState(false);
@@ -47,7 +48,11 @@ export default function UserManagementPage() {
 
   // Load departments from cached settings
   useEffect(() => {
-    getCachedSystemSettings().then((s) => setDepartments(s.departments));
+    getCachedSystemSettings().then((s) => {
+      if (s?.departments?.length) setDepartments(s.departments);
+    }).catch((err) => {
+      console.warn("Could not load departments (using defaults):", err);
+    });
   }, []);
 
   const loadData = useCallback(async (cursor: QueryDocumentSnapshot<DocumentData> | null = null) => {

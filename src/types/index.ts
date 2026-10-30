@@ -75,6 +75,31 @@ export interface SystemSettings {
   updatedAt?: any;
 }
 
+export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
+  categories: [
+    "Academic & Curriculum",
+    "Examinations & Evaluation",
+    "Hostel & Mess Facilities",
+    "Campus Infrastructure & Labs",
+    "Harassment & Discipline",
+    "Library & Learning Resources",
+    "Fee & Financial Aid",
+    "Sports & Extra-Curricular",
+    "General / Other",
+  ],
+  departments: [
+    "Computer Science & Engineering",
+    "Electronics & Communication",
+    "Mechanical Engineering",
+    "Civil Engineering",
+    "Electrical Engineering",
+    "Information Technology",
+    "Administrative Office",
+    "Accounts & Finance",
+    "Hostel Administration",
+  ],
+};
+
 export interface DashboardStats {
   total: number;
   pending: number;
