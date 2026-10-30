@@ -1,0 +1,37 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isStaffOrAdmin() {
+      return request.auth != null && 
+        (request.auth.token.role == 'admin' || 
+         request.auth.token.role == 'principal' || 
+         request.auth.token.role == 'grievance_cell');
+    }
+
+    function isGrievanceOwner(grievanceId) {
+      return request.auth != null && 
+        firestore.get(/databases/(default)/documents/grievances/$(grievanceId)).data.submittedByUid == request.auth.uid;
+    }
+
+    // Grievance evidence folder
+    match /grievance-evidence/{grievanceId}/{fileName} {
+      // Only staff/admin or the grievance submitter can read evidence attachments
+      allow read: if isStaffOrAdmin() || isGrievanceOwner(grievanceId);
+      
+      // Allow upload only if authenticated, <= 10MB, valid image/pdf, and caller is staff/admin or creating/owning this grievance
+      allow create, update: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf')
+        && (isStaffOrAdmin() || !firestore.exists(/databases/(default)/documents/grievances/$(grievanceId)) || isGrievanceOwner(grievanceId));
+
+      // Only staff/admin can delete evidence files
+      allow delete: if isStaffOrAdmin();
+    }
+
+    // Default deny all other paths in storage bucket
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

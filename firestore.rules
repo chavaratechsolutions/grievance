@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for RBAC using Custom Claims (0 Firestore reads!)
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSystemAdmin() {
+      return isAuthenticated() && request.auth.token.role == 'admin';
+    }
+
+    function isPrincipal() {
+      return isAuthenticated() && request.auth.token.role == 'principal';
+    }
+
+    function isGrievanceCell() {
+      return isAuthenticated() && request.auth.token.role == 'grievance_cell';
+    }
+
+    function isStaffOrAdmin() {
+      return isSystemAdmin() || isPrincipal() || isGrievanceCell();
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // User can read their own profile; Admin can read all
+      allow read: if isOwner(userId) || isStaffOrAdmin();
+      // Only Admin or Admin SDK can write user docs
+      allow write: if isSystemAdmin();
+    }
+
+    // System Settings (Categories, Departments)
+    match /settings/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isSystemAdmin();
+    }
+
+    // Grievances collection
+    match /grievances/{grievanceId} {
+      // Staff/Admins can read all grievances.
+      // Students can ONLY read grievances they submitted.
+      allow read: if isStaffOrAdmin() || 
+        (isAuthenticated() && resource.data.submittedByUid == request.auth.uid);
+
+      // Authenticated users (students) can create complaints for themselves only
+      allow create: if isAuthenticated() && 
+        request.resource.data.submittedByUid == request.auth.uid &&
+        request.resource.data.status == 'submitted';
+
+      // Only staff/admin can update grievances (status changes, resolution)
+      // Students can never modify a filed grievance; submitter UID is immutable
+      allow update: if isStaffOrAdmin() && 
+        request.resource.data.submittedByUid == resource.data.submittedByUid;
+      allow delete: if isSystemAdmin();
+
+      // Timeline subcollection (Fetched on-demand only!)
+      match /timeline/{stepId} {
+        // Readable if user has access to parent grievance
+        allow read: if isStaffOrAdmin() || 
+          (isAuthenticated() && get(/databases/$(database)/documents/grievances/$(grievanceId)).data.submittedByUid == request.auth.uid);
+
+        // Staff can append timeline entries (Next Step Taken / Resolved)
+        // Submitter can ONLY append their initial creation record on their own complaint
+        allow create: if isStaffOrAdmin() || 
+          (isAuthenticated() && 
+           request.auth.uid == request.resource.data.performedBy.uid &&
+           request.resource.data.actionType == 'created' &&
+           request.resource.data.statusTo == 'submitted' &&
+           get(/databases/$(database)/documents/grievances/$(grievanceId)).data.submittedByUid == request.auth.uid);
+        
+        allow update, delete: if isSystemAdmin();
+      }
+    }
+  }
+}
