@@ -6,7 +6,16 @@ let adminApp: App;
 
 const projectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+
+const rawKey = process.env.FIREBASE_PRIVATE_KEY;
+let privateKey: string | undefined;
+if (rawKey) {
+  let cleaned = rawKey.trim();
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1);
+  }
+  privateKey = cleaned.replace(/\\n/g, "\n");
+}
 
 export const isFirebaseAdminConfigured = Boolean(
   projectId && 

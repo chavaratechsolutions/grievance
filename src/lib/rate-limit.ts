@@ -149,7 +149,7 @@ const KNOWN_BOT_PATTERNS = [
  */
 export function isSuspiciousBot(userAgent?: string | null): boolean {
   if (!userAgent || userAgent.trim() === "") {
-    return true; // Reject requests with completely blank user-agents
+    return false; // Allow requests if User-Agent is omitted by reverse proxy/serverless boundary
   }
   return KNOWN_BOT_PATTERNS.some((pattern) => pattern.test(userAgent));
 }

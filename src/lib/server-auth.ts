@@ -1,4 +1,4 @@
-import { adminAuth, isFirebaseAdminConfigured } from "@/lib/firebase/admin";
+import { adminAuth, adminDb, isFirebaseAdminConfigured } from "@/lib/firebase/admin";
 import { cookies, headers } from "next/headers";
 import { Role } from "@/types";
 
@@ -49,12 +49,41 @@ export async function requireAuth(explicitToken?: string): Promise<Authenticated
   }
 
   try {
-    const decoded = await adminAuth.verifyIdToken(token, true);
+    const decoded = await adminAuth.verifyIdToken(token, false);
+    let role = (decoded.role as Role) || undefined;
+    let department = decoded.department as string | undefined;
+
+    // Fallback: If custom claims aren't attached or user has student default, verify Firestore user document
+    if (!role || role === "student") {
+      try {
+        const userDoc = await adminDb.collection("users").doc(decoded.uid).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          if (userData?.role) {
+            role = userData.role as Role;
+            department = department || userData.department;
+
+            // Auto-sync custom claims to Firebase Auth so subsequent calls have zero-read latency
+            if (userData.role === "admin" || userData.role === "principal" || userData.role === "grievance_cell") {
+              adminAuth
+                .setCustomUserClaims(decoded.uid, {
+                  role: userData.role,
+                  department: userData.department || "",
+                })
+                .catch((e) => console.warn("Background claim sync notice:", e));
+            }
+          }
+        }
+      } catch (dbErr) {
+        console.warn("Could not check Firestore user doc:", dbErr);
+      }
+    }
+
     return {
       uid: decoded.uid,
       email: decoded.email,
-      role: (decoded.role as Role) || "student",
-      department: decoded.department as string | undefined,
+      role: role || "student",
+      department,
     };
   } catch (error: any) {
     console.error("Token verification failed:", error?.message || error);

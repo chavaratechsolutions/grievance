@@ -8,6 +8,7 @@ import {
   Save, 
   Loader2, 
   CheckCircle2, 
+  AlertCircle,
   Layers, 
   Building2,
   RefreshCw,
@@ -27,17 +28,19 @@ export default function SystemSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [newCategory, setNewCategory] = useState("");
   const [newDepartment, setNewDepartment] = useState("");
 
   const loadSettings = async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const data = await getCachedSystemSettings();
       if (data?.categories?.length) setCategories(data.categories);
       if (data?.departments?.length) setDepartments(data.departments);
-    } catch (e) {
+    } catch (e: any) {
       console.warn("Could not fetch server settings (using defaults):", e);
     } finally {
       setLoading(false);
@@ -83,19 +86,25 @@ export default function SystemSettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     setSuccessMsg(false);
+    setErrorMsg(null);
 
-    const token = await auth.currentUser?.getIdToken();
-    const res = await updateSystemSettings({
-      categories,
-      departments,
-    }, token);
+    try {
+      const token = await auth.currentUser?.getIdToken(true);
+      const res = await updateSystemSettings({
+        categories,
+        departments,
+      }, token);
 
-    setSaving(false);
-    if (res.success) {
-      setSuccessMsg(true);
-      setTimeout(() => setSuccessMsg(false), 4000);
-    } else {
-      alert(`Save error: ${res.error}`);
+      setSaving(false);
+      if (res.success) {
+        setSuccessMsg(true);
+        setTimeout(() => setSuccessMsg(false), 4000);
+      } else {
+        setErrorMsg(res.error || "Failed to update settings.");
+      }
+    } catch (err: any) {
+      setSaving(false);
+      setErrorMsg(err.message || "Failed to save settings.");
     }
   };
 
@@ -146,6 +155,21 @@ export default function SystemSettingsPage() {
           </button>
         </div>
       </div>
+
+      {errorMsg && (
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between gap-2 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <button 
+            onClick={() => setErrorMsg(null)}
+            className="text-xs font-semibold px-2 py-1 rounded-lg hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 transition"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {successMsg && (
         <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-200 text-xs flex items-center gap-2 animate-in fade-in">

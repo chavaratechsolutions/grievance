@@ -2,7 +2,7 @@
 
 import { adminDb, isFirebaseAdminConfigured } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
-import { revalidateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { SystemSettings, DEFAULT_SYSTEM_SETTINGS } from "@/types";
 import { requireAdmin } from "@/lib/server-auth";
 import { assertRateLimit, getUserAgent, isSuspiciousBot } from "@/lib/rate-limit";
@@ -54,17 +54,25 @@ export async function updateSystemSettings(
   idToken?: string
 ) {
   try {
-    // 0. Bot protection check
+    // 0. Check Firebase Admin configuration
+    if (!isFirebaseAdminConfigured) {
+      return {
+        success: false,
+        error: "Firebase Admin SDK is not configured on the server. Please verify FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in your hosting dashboard.",
+      };
+    }
+
+    // 1. Bot protection check
     const userAgent = await getUserAgent();
     if (isSuspiciousBot(userAgent)) {
       return { success: false, error: "Automated requests are not permitted." };
     }
 
-    // 1. Enforce Admin Authentication & Authorization
+    // 2. Enforce Admin Authentication & Authorization
     const adminUser = await requireAdmin(idToken);
 
-    // 2. Per-admin rate limiting (15 updates / minute)
-    await assertRateLimit("update-settings", { limit: 15, windowMs: 60 * 1000 }, adminUser.uid);
+    // 3. Per-admin rate limiting (30 updates / minute)
+    await assertRateLimit("update-settings", { limit: 30, windowMs: 60 * 1000 }, adminUser.uid);
 
     const payload: Record<string, any> = {
       updatedAt: FieldValue.serverTimestamp(),
@@ -97,8 +105,13 @@ export async function updateSystemSettings(
 
     await adminDb.collection("settings").doc("system").set(payload, { merge: true });
 
-    // Instantly invalidate server cache tag so fresh settings are served on next request
-    revalidateTag("system-settings", "max");
+    // Invalidate cached paths so next requests serve fresh settings
+    try {
+      revalidatePath("/admin/settings");
+      revalidatePath("/student/new");
+    } catch (tagErr) {
+      console.warn("revalidatePath notice:", tagErr);
+    }
 
     return { success: true };
   } catch (error: any) {
