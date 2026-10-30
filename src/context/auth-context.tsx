@@ -88,6 +88,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       document.cookie = `__session=${idToken}; path=/; max-age=3600; SameSite=Lax; Secure`;
       return { success: true };
     } catch (error: any) {
+      const code = error?.code;
+      const msg = error?.message || "";
+      if (
+        code === "auth/invalid-credential" ||
+        code === "auth/user-not-found" ||
+        code === "auth/wrong-password" ||
+        code === "auth/invalid-login-credentials" ||
+        code === "auth/invalid-email" ||
+        msg.includes("auth/invalid-credential") ||
+        msg.includes("auth/wrong-password") ||
+        msg.includes("auth/user-not-found")
+      ) {
+        return { success: false, error: "email or password incorrect" };
+      }
       return { success: false, error: error.message || "Failed to sign in." };
     }
   };

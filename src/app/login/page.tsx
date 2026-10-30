@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  Scale, 
-  Lock, 
-  Mail, 
-  ArrowRight, 
-  Loader2, 
+import {
+  Scale,
+  Lock,
+  Mail,
+  ArrowRight,
+  Loader2,
   ShieldCheck,
   UserPlus
 } from "lucide-react";
@@ -58,7 +58,17 @@ export default function LoginPage() {
     if (res.success) {
       // AuthProvider onAuthStateChanged will handle profile & redirect
     } else {
-      setError(res.error || "Invalid institutional credentials. Please check your email and password.");
+      const errMsg = res.error || "email or password incorrect";
+      if (
+        errMsg.includes("auth/invalid-credential") ||
+        errMsg.includes("auth/wrong-password") ||
+        errMsg.includes("auth/user-not-found") ||
+        errMsg.includes("auth/invalid-email")
+      ) {
+        setError("email or password incorrect");
+      } else {
+        setError(errMsg);
+      }
     }
   };
 
@@ -93,9 +103,9 @@ export default function LoginPage() {
             {showSetup ? "Initialize Root Administrator" : "Sign In to Redressal Portal"}
           </h1>
           <p className="text-xs text-zinc-500">
-            {showSetup 
+            {showSetup
               ? "First-time setup: Create the primary Administrator account in your Firebase database."
-              : "Enter your institutional email and password to access the portal."}
+              : "Enter your email and password to access the portal."}
           </p>
         </div>
 
@@ -192,7 +202,7 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  Institutional Email Address
+                  Email Address
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-3 h-4 w-4 text-zinc-400" />
